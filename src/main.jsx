@@ -68,6 +68,61 @@ function radarPoints(vals,cx=110,cy=110,r=82){return vals.map((v,i)=>{const a=-M
 function smartAnswer(q,chart,w,forecast){const t=q.trim();if(!t)return'請先輸入你想問的問題。';const career=findPalace(chart,HOUSE_MAP.career),love=findPalace(chart,HOUSE_MAP.love),money=findPalace(chart,HOUSE_MAP.wealth);if(/工作|事業|轉職|職涯/.test(t))return`事業面可先看${palaceTitle(career?.name||'官祿宮')}：${starText(career)}。今年主題是「${forecast.theme}」，建議把重點放在可累積的成果與可被看見的專業。`;if(/愛情|感情|伴侶|戀愛/.test(t))return`感情面：${starText(love)} 月亮${w.moon.name}表示你的安全感需求是重要關鍵。比起只看吸引力，更適合觀察對方是否能回應你的情緒節奏。`;if(/錢|財|投資|收入/.test(t))return`財富面：${starText(money)}。今年財運指數約 ${forecast.scores.money}/100，適合先做現金流與風險分層，不建議把命理結果當作投資依據。`;if(/今年|流年|運勢/.test(t))return`${forecast.summary} 事業 ${forecast.scores.career}/100、感情 ${forecast.scores.love}/100、財富 ${forecast.scores.money}/100、成長 ${forecast.scores.growth}/100。`;return`從四重人格來看：太陽${w.sun.name}是你的核心方向、月亮${w.moon.name}是情緒需求、上升${w.asc.name}是外在行動方式。你可以把問題再聚焦成「工作、感情、財富、今年運勢」，我會用相對應宮位回答。`}
 function shareText(name,chart,w){return`${name||'我的'}星命之境｜太陽${w.sun.name}・月亮${w.moon.name}・上升${w.asc.name}・命主${chart.soul||'—'}。紫微×西洋占星四重人格解析。`}
 
+
+const PLANETS=[
+['Sun','太陽','☉','核心自我與生命意志'],['Moon','月亮','☾','情緒、安全感與本能'],
+['Mercury','水星','☿','思考、學習與溝通'],['Venus','金星','♀','愛情、審美與價值'],
+['Mars','火星','♂','行動、慾望與競爭'],['Jupiter','木星','♃','擴張、機會與信念'],
+['Saturn','土星','♄','責任、界線與成熟'],['Uranus','天王星','♅','自由、改革與突破'],
+['Neptune','海王星','♆','想像、直覺與理想'],['Pluto','冥王星','♇','深層轉化與力量']
+];
+const MODES={牡羊座:'基本',巨蟹座:'基本',天秤座:'基本',摩羯座:'基本',金牛座:'固定',獅子座:'固定',天蠍座:'固定',水瓶座:'固定',雙子座:'變動',處女座:'變動',射手座:'變動',雙魚座:'變動'};
+const PLANET_TEXT={
+Sun:'你建立自我認同、展現意志與追求成就的方式。',Moon:'你在私下如何感受、尋找安全感與回應情緒。',
+Mercury:'你吸收資訊、做判斷、說話與學習的方式。',Venus:'你如何喜歡一個人、建立價值感，以及被什麼美感吸引。',
+Mars:'你採取行動、競爭、表達慾望與捍衛界線的方式。',Jupiter:'你容易擴張、獲得信心與看見機會的領域。',
+Saturn:'你需要耐心練習、承擔責任並建立成熟能力的課題。',Uranus:'你不願被框架限制、想創新與突破傳統的地方。',
+Neptune:'你的想像、理想、同理與容易投射期待的部分。',Pluto:'你面對控制、失去、重生與深層心理力量的方式。'
+};
+function planetLongitude(bodyName,utc){
+  if(bodyName==='Moon') return calcMoon(utc).longitude;
+  const body=Astronomy.Body[bodyName];
+  const vec=Astronomy.GeoVector(body,utc,true);
+  return norm360(Astronomy.Ecliptic(vec).elon);
+}
+function fullNatal(utc){
+  return PLANETS.map(([key,name,symbol,meaning])=>{
+    const lon=planetLongitude(key,utc),sign=signFromLon(lon);
+    return {key,name,symbol,meaning,lon,sign,mode:MODES[sign.name]};
+  });
+}
+function angularDiff(a,b){const d=Math.abs(norm360(a-b));return d>180?360-d:d}
+const ASPECTS=[['合相',0,8,'融合／放大'],['六分相',60,5,'機會／協調'],['四分相',90,7,'張力／成長'],['三分相',120,7,'天賦／流動'],['對分相',180,8,'拉扯／平衡']];
+function natalAspects(planets){
+  const rows=[];
+  for(let i=0;i<planets.length;i++)for(let j=i+1;j<planets.length;j++){
+    const d=angularDiff(planets[i].lon,planets[j].lon);
+    for(const [name,angle,orb,nature] of ASPECTS){
+      const delta=Math.abs(d-angle);
+      if(delta<=orb){rows.push({a:planets[i],b:planets[j],name,angle,orb:delta,nature});break}
+    }
+  }
+  return rows.sort((x,y)=>x.orb-y.orb).slice(0,18);
+}
+function natalBalance(planets){
+  const elements={火:0,土:0,風:0,水:0},modes={基本:0,固定:0,變動:0};
+  planets.forEach(p=>{elements[p.sign.element]++;modes[p.mode]++});
+  return {elements,modes};
+}
+function planetInterpret(p){
+  const flavor={火:'表現較直接、主動，重視行動與熱情。',土:'傾向務實、穩定，重視可落地的成果。',風:'偏向思考、溝通與交換觀點。',水:'感受細膩，重視情緒、直覺與關係深度。'}[p.sign.element];
+  return `${PLANET_TEXT[p.key]} ${p.name}落在${p.sign.name}，${flavor}`;
+}
+function aspectInterpret(a){
+  const core={合相:'兩股能量彼此融合，感受通常較強烈。',六分相:'兩股能量容易找到合作機會，需要主動運用。',四分相:'容易形成內在張力，但也是推動成長的重要力量。',三分相:'兩股能量自然流動，常形成容易被忽略的天賦。',對分相:'兩端需求彼此拉扯，課題是找到平衡與整合。'}[a.name];
+  return `${a.a.name} × ${a.b.name}｜${core}`;
+}
+
 function App(){
 const empty={name:'',gender:'',date:'',time:'',city:'',latitude:'',longitude:'',tz:'8'};
 const [form,setForm]=useState(empty),[chart,setChart]=useState(null),[western,setWestern]=useState(null),[error,setError]=useState(''),[selected,setSelected]=useState(0);
@@ -77,6 +132,9 @@ const sun=useMemo(()=>form.date?sunSignFromDate(form.date):null,[form.date]),sel
 const analyses=useMemo(()=>chart&&western?makeAnalysis(chart,western.sun,western.moon,western.asc):[],[chart,western]);
 const forecast=useMemo(()=>chart&&western?yearlyForecast(chart,western,year):null,[chart,western,year]);
 const radar=useMemo(()=>chart&&western?radarValues(chart,western):null,[chart,western]);
+const natal=useMemo(()=>western?fullNatal(western.utc):[],[western]);
+const aspects=useMemo(()=>natal.length?natalAspects(natal):[],[natal]);
+const balance=useMemo(()=>natal.length?natalBalance(natal):null,[natal]);
 
 function applyPlace(city,setter){const coords=PLACES[city];setter(f=>({...f,city,...(coords?{latitude:String(coords[0]),longitude:String(coords[1])}:{latitude:'',longitude:''})}))}
 function validate(f){return f.gender&&f.date&&f.time&&f.city&&f.latitude!==''&&f.longitude!==''}
@@ -85,9 +143,9 @@ function generatePartner(e){e?.preventDefault();if(!validate(partner)){setCompat
 async function shareResult(){const text=shareText(form.name,chart,western);try{if(navigator.share){await navigator.share({title:'星命之境｜我的四重人格',text})}else{await navigator.clipboard.writeText(text);setShareStatus('結果摘要已複製！');setTimeout(()=>setShareStatus(''),2200)}}catch{}}
 
 return <div className="app">
-<header className="nav"><div className="brand"><span className="orb">✦</span><div><b>星命之境</b><small>ASTRO DESTINY</small></div></div><nav><a href="#generate">命盤</a><a href="#year">流年</a><a href="#match">合盤</a><a href="#ask">問命</a><a href="#share">分享</a></nav></header>
+<header className="nav"><div className="brand"><span className="orb">✦</span><div><b>星命之境</b><small>紫微 × 星座命運解析</small></div></div><nav><a href="#generate">命盤</a><a href="#natal">本命星盤</a><a href="#year">流年</a><a href="#match">合盤</a><a href="#ask">問命</a><a href="#share">分享</a></nav></header>
 <main>
-<section id="home" className="hero"><div className="rings"></div><div className="hero-inner"><span className="eyebrow">紫微斗數 × 太陽 × 月亮 × 上升</span><h1>你的出生時刻，<br/>藏著一張<span>專屬的人生地圖</span>。</h1><p>命盤、流年、愛情合盤、智慧問命與分享卡，一站完成。</p><a className="primary" href="#generate">開始我的完整命盤</a></div></section>
+<section id="home" className="hero"><div className="rings"></div><div className="hero-inner"><span className="eyebrow">ASTRO DESTINY｜紫微 × 星座命運解析</span><h1>你的出生時刻，<br/>藏著一張<span>專屬的人生地圖</span>。</h1><p>結合紫微斗數、西洋星座、流年、合盤與智慧解析，探索你的專屬命運軌跡。</p><a className="primary" href="#generate">開始我的完整命盤</a></div></section>
 
 <section id="generate" className="section"><div className="section-head"><span>01</span><div><h2>輸入出生資料</h2><p>不預載個人資料；上升星座請盡量使用正確出生時間與地點。</p></div></div>
 <form className="form-card" onSubmit={generate}>
@@ -112,18 +170,33 @@ return <div className="app">
 <div><span className="eyebrow">FOURFOLD PERSONALITY</span><h2>你的四重人格地圖</h2><p>{fourfoldText(chart,western.sun,western.moon,western.asc)}</p></div></div>
 <div className="analysis-grid">{analyses.map((a,i)=><article className="analysis-card" key={a.title}><div className="analysis-icon">{a.icon}</div><small>{String(i+1).padStart(2,'0')}・{a.source}</small><h3>{a.title}</h3><p>{a.summary}</p><div className="analysis-note"><b>優勢</b><span>{a.strength}</span></div><div className="analysis-note"><b>留意</b><span>{a.challenge}</span></div></article>)}</div></section>
 
-<section id="year" className="section"><div className="section-head"><span>05</span><div><h2>{year} 流年運勢</h2><p>以你的命盤與三大星座產生年度主題與月份節奏。</p></div></div>
+<section id="natal" className="section"><div className="section-head"><span>05</span><div><h2>完整西洋本命星盤</h2><p>從十大行星、星座落點、四元素、三模式與主要相位，深入閱讀你的性格結構。</p></div></div>
+<div className="natal-intro"><span className="eyebrow">NATAL CHART</span><h2>十大行星落點</h2><p>每顆行星代表不同心理功能；「落在哪個星座」描述這股能量習慣如何表現。</p></div>
+<div className="planet-grid">{natal.map(p=><article className="planet-card" key={p.key}><div className="planet-head"><span>{p.symbol}</span><div><small>{p.name}</small><h3>{p.sign.name} <em>{p.sign.degree.toFixed(1)}°</em></h3></div></div><b>{p.meaning}</b><p>{planetInterpret(p)}</p><div className="chips"><span>{p.sign.element}元素</span><span>{p.mode}宮</span></div></article>)}</div>
+
+<div className="section-subhead"><div><span className="eyebrow">ELEMENT & MODE</span><h2>四元素 × 三模式</h2><p>看你整張星盤的能量偏向，而不是只看單一星座。</p></div></div>
+<div className="balance-grid">
+<div className="balance-card"><h3>四元素比例</h3>{Object.entries(balance.elements).map(([k,v])=><div className="balance-row" key={k}><span>{k}元素</span><div><i style={{width:`${v*10}%`}}/></div><b>{v*10}%</b></div>)}</div>
+<div className="balance-card"><h3>三模式比例</h3>{Object.entries(balance.modes).map(([k,v])=><div className="balance-row" key={k}><span>{k}宮</span><div><i style={{width:`${v*10}%`}}/></div><b>{v*10}%</b></div>)}</div>
+</div>
+
+<div className="section-subhead"><div><span className="eyebrow">MAJOR ASPECTS</span><h2>主要相位解析</h2><p>相位描述兩顆行星之間如何互動；越接近精確角度，通常越值得優先閱讀。</p></div></div>
+<div className="aspect-grid">{aspects.map((a,i)=><article className="aspect-card" key={`${a.a.key}-${a.b.key}-${i}`}><div className="aspect-symbols"><span>{a.a.symbol}</span><i>×</i><span>{a.b.symbol}</span></div><small>{a.a.name} × {a.b.name}</small><h3>{a.name}</h3><b>{a.nature}・容許度 {a.orb.toFixed(1)}°</b><p>{aspectInterpret(a)}</p></article>)}</div>
+<div className="natal-note"><b>專業說明</b><p>此版本使用熱帶黃道與地心行星位置呈現十大行星與主要相位。宮位系統、交點與更進階技法可在下一階段再加入；不同占星軟體的設定與容許度也可能造成結果差異。</p></div>
+</section>
+
+<section id="year" className="section"><div className="section-head"><span>06</span><div><h2>{year} 流年運勢</h2><p>以你的命盤與三大星座產生年度主題與月份節奏。</p></div></div>
 <div className="forecast-card"><div><span className="eyebrow">YEAR THEME</span><h2>{forecast.theme}</h2><p>{forecast.summary}</p><select className="year-select" value={year} onChange={e=>setYear(Number(e.target.value))}>{[year-1,year,year+1,year+2].map(y=><option key={y}>{y}</option>)}</select></div>
 <div className="score-grid">{Object.entries({事業:forecast.scores.career,感情:forecast.scores.love,財富:forecast.scores.money,成長:forecast.scores.growth}).map(([k,v])=><div key={k}><span>{k}</span><b>{v}</b><div className="meter"><i style={{width:`${v}%`}}/></div></div>)}</div></div>
 <div className="months">{forecast.months.map(x=><div key={x.m}><b>{x.m}月</b><span>{x.score}</span><i style={{height:`${x.score}%`}}/></div>)}</div></section>
 
-<section id="match" className="section"><div className="section-head"><span>06</span><div><h2>愛情合盤</h2><p>輸入第二個人的出生資料，比較太陽、月亮與上升的互動。</p></div></div>
+<section id="match" className="section"><div className="section-head"><span>07</span><div><h2>愛情合盤</h2><p>輸入第二個人的出生資料，比較太陽、月亮與上升的互動。</p></div></div>
 <form className="form-card compact" onSubmit={generatePartner}><label>對方姓名<input value={partner.name} onChange={e=>setPartner({...partner,name:e.target.value})}/></label><label>性別<select required value={partner.gender} onChange={e=>setPartner({...partner,gender:e.target.value})}><option value="" disabled>請選擇</option><option value="女">女</option><option value="男">男</option></select></label><label>出生日期<input required type="date" value={partner.date} onChange={e=>setPartner({...partner,date:e.target.value})}/></label><label>出生時間<input required type="time" value={partner.time} onChange={e=>setPartner({...partner,time:e.target.value})}/></label><label>出生地<input required list="places" value={partner.city} onChange={e=>applyPlace(e.target.value,setPartner)} placeholder="請選擇出生地"/></label><label>UTC 時區<select value={partner.tz} onChange={e=>setPartner({...partner,tz:e.target.value})}><option value="8">+8 台灣</option><option value="9">+9</option><option value="0">+0</option><option value="-5">-5</option></select></label><input type="hidden" value={partner.latitude}/><input type="hidden" value={partner.longitude}/><button className="primary wide">計算愛情合盤</button></form>
 {compat&&<div className="match-result">{compat.error?<p>{compat.error}</p>:<><div className="compat-score"><b>{compat.score}</b><span>默契指數</span></div><div><h3>{form.name||'你'} × {partner.name||'對方'}</h3><p>{compat.summary}</p><div className="chips"><span>太陽 {compat.sun*10}%</span><span>月亮 {compat.moon*10}%</span><span>上升 {compat.asc*10}%</span></div></div></>}</div>}</section>
 
-<section id="ask" className="section"><div className="section-head"><span>07</span><div><h2>智慧問命</h2><p>目前是「命盤規則版」智慧解讀，不會把出生資料傳到外部 AI。</p></div></div><div className="ask-card"><div className="quick-asks">{['今年工作運如何？','我的感情模式？','財運要注意什麼？','今年整體運勢？'].map(q=><button key={q} onClick={()=>{setQuestion(q);setAnswer(smartAnswer(q,chart,western,forecast))}}>{q}</button>)}</div><textarea value={question} onChange={e=>setQuestion(e.target.value)} placeholder="例如：我今年適合轉職嗎？"/><button className="primary" onClick={()=>setAnswer(smartAnswer(question,chart,western,forecast))}>解析我的問題</button>{answer&&<div className="answer-box"><span>ASTRO ANSWER</span><p>{answer}</p></div>}</div></section>
+<section id="ask" className="section"><div className="section-head"><span>08</span><div><h2>智慧問命</h2><p>目前是「命盤規則版」智慧解讀，不會把出生資料傳到外部 AI。</p></div></div><div className="ask-card"><div className="quick-asks">{['今年工作運如何？','我的感情模式？','財運要注意什麼？','今年整體運勢？'].map(q=><button key={q} onClick={()=>{setQuestion(q);setAnswer(smartAnswer(q,chart,western,forecast))}}>{q}</button>)}</div><textarea value={question} onChange={e=>setQuestion(e.target.value)} placeholder="例如：我今年適合轉職嗎？"/><button className="primary" onClick={()=>setAnswer(smartAnswer(question,chart,western,forecast))}>解析我的問題</button>{answer&&<div className="answer-box"><span>ASTRO ANSWER</span><p>{answer}</p></div>}</div></section>
 
-<section id="share" className="section"><div className="section-head"><span>08</span><div><h2>命盤分享卡</h2><p>把四重人格摘要分享給朋友或複製到社群貼文。</p></div></div><div className="share-card"><span className="share-star">✦</span><small>ASTRO DESTINY</small><h2>{form.name||'我的'}四重人格</h2><div className="share-signs"><span>太陽<b>{western.sun.name}</b></span><span>月亮<b>{western.moon.name}</b></span><span>上升<b>{western.asc.name}</b></span><span>命主<b>{chart.soul||'—'}</b></span></div><p>{shareText(form.name,chart,western)}</p><button className="primary" onClick={shareResult}>分享我的結果</button>{shareStatus&&<em>{shareStatus}</em>}</div></section>
+<section id="share" className="section"><div className="section-head"><span>09</span><div><h2>命盤分享卡</h2><p>把四重人格摘要分享給朋友或複製到社群貼文。</p></div></div><div className="share-card"><span className="share-star">✦</span><small>ASTRO DESTINY</small><h2>{form.name||'我的'}四重人格</h2><div className="share-signs"><span>太陽<b>{western.sun.name}</b></span><span>月亮<b>{western.moon.name}</b></span><span>上升<b>{western.asc.name}</b></span><span>命主<b>{chart.soul||'—'}</b></span></div><p>{shareText(form.name,chart,western)}</p><button className="primary" onClick={shareResult}>分享我的結果</button>{shareStatus&&<em>{shareStatus}</em>}</div></section>
 <p className="disclaimer">占星與命理內容供文化、娛樂與自我探索參考，不應作為醫療、法律、財務或重大人生決策的唯一依據。</p>
 </>}
 </main></div>}
