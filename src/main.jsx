@@ -115,28 +115,23 @@ function fourfoldText(chart,sun,moon,asc){
 }
 
 function App(){
- const [form,setForm]=useState({
-  name:'',
-  gender:'',
-  date:'',
-  time:'',
-  city:'',
-  latitude:'',
-  longitude:'',
-  tz:'8'
-});
+  const [form,setForm]=useState({name:'',gender:'',date:'',time:'',city:'',latitude:'',longitude:'',tz:'8'});
   const [chart,setChart]=useState(null); const [western,setWestern]=useState(null); const [error,setError]=useState(''); const [selected,setSelected]=useState(0);
-  const sun=useMemo(()=>sunSignFromDate(form.date),[form.date]);
+  const sun=useMemo(()=>form.date ? sunSignFromDate(form.date) : null,[form.date]);
   const selectedPalace=chart?.palaces?.[selected];
   const palaceRows=useMemo(()=>chart?.palaces||[],[chart]);
   const analyses=useMemo(()=>chart&&western?makeAnalysis(chart,western.sun,western.moon,western.asc):[],[chart,western]);
 
   function applyPlace(city){
     const coords=PLACES[city];
-    setForm(f=>({...f,city,...(coords?{latitude:String(coords[0]),longitude:String(coords[1])}:{})}));
+    setForm(f=>({...f,city,...(coords?{latitude:String(coords[0]),longitude:String(coords[1])}:{latitude:'',longitude:''})}));
   }
   function generate(e){
     e?.preventDefault(); setError('');
+    if(!form.gender||!form.date||!form.time||!form.city||form.latitude===''||form.longitude===''){
+      setError('請完整填寫性別、出生日期、出生時間與出生地。');
+      return;
+    }
     try{
       const idx=timeToIndex(form.time);
       const result=astro.bySolar(form.date,idx,form.gender,true,'zh-TW');
@@ -159,15 +154,15 @@ function App(){
 
       <section id="generate" className="section"><div className="section-head"><span>01</span><div><h2>輸入出生資料</h2><p>上升星座對時間與地點很敏感，請盡量使用正確出生時間與經緯度。</p></div></div>
         <form className="form-card" onSubmit={generate}>
-          <label>姓名／暱稱<input value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label>
-          <label>性別<select value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})}><option>女</option><option>男</option></select></label>
+          <label>姓名／暱稱（選填）<input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="請輸入姓名或暱稱"/></label>
+          <label>性別<select required value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})}><option value="" disabled>請選擇性別</option><option value="女">女</option><option value="男">男</option></select></label>
           <label>出生日期<input required type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></label>
           <label>出生時間<input required type="time" value={form.time} onChange={e=>setForm({...form,time:e.target.value})}/></label>
-          <label>出生地<input list="places" value={form.city} onChange={e=>applyPlace(e.target.value)}/><datalist id="places">{Object.keys(PLACES).map(x=><option key={x} value={x}/>)}</datalist></label>
+          <label>出生地<input required list="places" value={form.city} onChange={e=>applyPlace(e.target.value)} placeholder="請選擇或輸入出生地"/><datalist id="places">{Object.keys(PLACES).map(x=><option key={x} value={x}/>)}</datalist></label>
           <label>UTC 時區<select value={form.tz} onChange={e=>setForm({...form,tz:e.target.value})}>{[-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,5.5,6,7,8,9,9.5,10,11,12,13,14].map(x=><option key={x} value={x}>{x>=0?'+':''}{x}</option>)}</select></label>
           <label>緯度<input type="number" step="0.0001" value={form.latitude} onChange={e=>setForm({...form,latitude:e.target.value})}/></label>
           <label>經度<input type="number" step="0.0001" value={form.longitude} onChange={e=>setForm({...form,longitude:e.target.value})}/></label>
-          <div className="time-hint wide">目前時辰：<b>{HOURS[timeToIndex(form.time)]?.[0]}</b>　｜　太陽星座：<b>{sun.name}</b>　｜　台灣請使用 UTC +8</div>
+          <div className="time-hint wide">{form.time&&<>目前時辰：<b>{HOURS[timeToIndex(form.time)]?.[0]}</b>　｜　</>}{sun&&<>太陽星座：<b>{sun.name}</b>　｜　</>}台灣請使用 UTC +8</div>
           {error&&<div className="error wide">{error}</div>}<button className="primary wide">產生四重人格完整分析</button>
         </form>
       </section>
