@@ -115,7 +115,16 @@ function fourfoldText(chart,sun,moon,asc){
 }
 
 function App(){
-  const [form,setForm]=useState({name:'',gender:'女',date:'1991-06-10',time:'01:30',city:'雲林縣',latitude:'23.7092',longitude:'120.4313',tz:'8'});
+ const [form,setForm]=useState({
+  name:'',
+  gender:'',
+  date:'',
+  time:'',
+  city:'',
+  latitude:'',
+  longitude:'',
+  tz:'8'
+});
   const [chart,setChart]=useState(null); const [western,setWestern]=useState(null); const [error,setError]=useState(''); const [selected,setSelected]=useState(0);
   const sun=useMemo(()=>sunSignFromDate(form.date),[form.date]);
   const selectedPalace=chart?.palaces?.[selected];
