@@ -123,6 +123,36 @@ function aspectInterpret(a){
   return `${a.a.name} × ${a.b.name}｜${core}`;
 }
 
+
+const HOUSE_MEANINGS=[
+'自我、外在形象、人生起點','金錢、價值感、資源與收入','溝通、學習、手足與日常移動',
+'家庭、根源、居所與內在安全','戀愛、創造、子女與自我表達','工作習慣、健康管理與服務',
+'伴侶、婚姻、合作與公開關係','親密、共享資源、危機與轉化','高等學習、遠行、信念與視野',
+'事業、名聲、社會角色與目標','朋友、社群、願景與團體','潛意識、休息、靈性與隱藏模式'
+];
+const SIGN_RULERS={牡羊座:'Mars',金牛座:'Venus',雙子座:'Mercury',巨蟹座:'Moon',獅子座:'Sun',處女座:'Mercury',天秤座:'Venus',天蠍座:'Pluto',射手座:'Jupiter',摩羯座:'Saturn',水瓶座:'Uranus',雙魚座:'Neptune'};
+function equalHouseData(ascLon){
+  const cusps=Array.from({length:12},(_,i)=>norm360(ascLon+i*30));
+  return {system:'等宮制 Equal House',cusps,mc:null};
+}
+function houseForLongitude(lon,ascLon){return Math.floor(norm360(lon-ascLon)/30)+1}
+function enrichNatalHouses(planets,ascLon){return planets.map(p=>({...p,house:houseForLongitude(p.lon,ascLon)}))}
+function houseInterpret(p){return `${p.name}落第${p.house}宮：${HOUSE_MEANINGS[p.house-1]}。${planetInterpret(p)}`}
+function dominant(items){return Object.entries(items).sort((a,b)=>b[1]-a[1])[0]}
+function rulerAnalysis(planets,asc){
+  const key=SIGN_RULERS[asc.name],p=planets.find(x=>x.key===key);
+  return p?{...p,text:`你的上升是${asc.name}，命主星為${p.name}。命主星落${p.sign.name}第${p.house}宮，表示人生主線特別容易透過「${HOUSE_MEANINGS[p.house-1]}」展開。`}:null
+}
+function careerLoveSynthesis(planets,western,chart){
+  const venus=planets.find(p=>p.key==='Venus'),mars=planets.find(p=>p.key==='Mars'),mercury=planets.find(p=>p.key==='Mercury'),jupiter=planets.find(p=>p.key==='Jupiter'),saturn=planets.find(p=>p.key==='Saturn');
+  const career=findPalace(chart,HOUSE_MAP.career),love=findPalace(chart,HOUSE_MAP.love);
+  return {
+    love:`紫微夫妻宮：${starText(love)} 西洋占星中，金星${venus.sign.name}落第${venus.house}宮描述你的喜愛與關係價值；火星${mars.sign.name}落第${mars.house}宮描述你主動追求、慾望與界線的方式。月亮${western.moon.name}則補充真正的情緒安全感。`,
+    career:`紫微事業宮：${starText(career)} 水星${mercury.sign.name}第${mercury.house}宮反映思考與溝通優勢；木星${jupiter.sign.name}第${jupiter.house}宮指出較容易擴張的領域；土星${saturn.sign.name}第${saturn.house}宮則是需要長期累積與承擔責任的課題。`
+  }
+}
+function aspectTone(name){return name==='三分相'||name==='六分相'?'flow':name==='四分相'||name==='對分相'?'challenge':'blend'}
+
 function App(){
 const empty={name:'',gender:'',date:'',time:'',city:'',latitude:'',longitude:'',tz:'8'};
 const [form,setForm]=useState(empty),[chart,setChart]=useState(null),[western,setWestern]=useState(null),[error,setError]=useState(''),[selected,setSelected]=useState(0);
@@ -132,9 +162,13 @@ const sun=useMemo(()=>form.date?sunSignFromDate(form.date):null,[form.date]),sel
 const analyses=useMemo(()=>chart&&western?makeAnalysis(chart,western.sun,western.moon,western.asc):[],[chart,western]);
 const forecast=useMemo(()=>chart&&western?yearlyForecast(chart,western,year):null,[chart,western,year]);
 const radar=useMemo(()=>chart&&western?radarValues(chart,western):null,[chart,western]);
-const natal=useMemo(()=>western?fullNatal(western.utc):[],[western]);
+const natalRaw=useMemo(()=>western?fullNatal(western.utc):[],[western]);
+const houses=useMemo(()=>western?equalHouseData(western.asc.longitude):null,[western]);
+const natal=useMemo(()=>western?enrichNatalHouses(natalRaw,western.asc.longitude):[],[natalRaw,western]);
 const aspects=useMemo(()=>natal.length?natalAspects(natal):[],[natal]);
 const balance=useMemo(()=>natal.length?natalBalance(natal):null,[natal]);
+const ruler=useMemo(()=>western&&natal.length?rulerAnalysis(natal,western.asc):null,[natal,western]);
+const synthesis=useMemo(()=>chart&&western&&natal.length?careerLoveSynthesis(natal,western,chart):null,[natal,western,chart]);
 
 function applyPlace(city,setter){const coords=PLACES[city];setter(f=>({...f,city,...(coords?{latitude:String(coords[0]),longitude:String(coords[1])}:{latitude:'',longitude:''})}))}
 function validate(f){return f.gender&&f.date&&f.time&&f.city&&f.latitude!==''&&f.longitude!==''}
@@ -145,7 +179,7 @@ async function shareResult(){const text=shareText(form.name,chart,western);try{i
 return <div className="app">
 <header className="nav"><div className="brand"><span className="orb">✦</span><div><b>星命之境</b><small>紫微 × 星座命運解析</small></div></div><nav><a href="#generate">命盤</a><a href="#natal">本命星盤</a><a href="#year">流年</a><a href="#match">合盤</a><a href="#ask">問命</a><a href="#share">分享</a></nav></header>
 <main>
-<section id="home" className="hero"><div className="rings"></div><div className="hero-inner"><span className="eyebrow">ASTRO DESTINY｜紫微 × 星座命運解析</span><h1>你的出生時刻，<br/>藏著一張<span>專屬的人生地圖</span>。</h1><p>結合紫微斗數、西洋星座、流年、合盤與智慧解析，探索你的專屬命運軌跡。</p><a className="primary" href="#generate">開始我的完整命盤</a></div></section>
+<section id="home" className="hero"><div className="rings"></div><div className="hero-inner"><span className="eyebrow">ASTRO DESTINY｜紫微 × 星座命運解析</span><h1>你的出生時刻，<br/>藏著一張<span>專屬的人生地圖</span>。</h1><p>結合紫微斗數、完整西洋本命星盤、十二宮、相位、流年與合盤，探索你的專屬人生地圖。</p><a className="primary" href="#generate">開始我的完整命盤</a></div></section>
 
 <section id="generate" className="section"><div className="section-head"><span>01</span><div><h2>輸入出生資料</h2><p>不預載個人資料；上升星座請盡量使用正確出生時間與地點。</p></div></div>
 <form className="form-card" onSubmit={generate}>
@@ -170,19 +204,29 @@ return <div className="app">
 <div><span className="eyebrow">FOURFOLD PERSONALITY</span><h2>你的四重人格地圖</h2><p>{fourfoldText(chart,western.sun,western.moon,western.asc)}</p></div></div>
 <div className="analysis-grid">{analyses.map((a,i)=><article className="analysis-card" key={a.title}><div className="analysis-icon">{a.icon}</div><small>{String(i+1).padStart(2,'0')}・{a.source}</small><h3>{a.title}</h3><p>{a.summary}</p><div className="analysis-note"><b>優勢</b><span>{a.strength}</span></div><div className="analysis-note"><b>留意</b><span>{a.challenge}</span></div></article>)}</div></section>
 
-<section id="natal" className="section"><div className="section-head"><span>05</span><div><h2>完整西洋本命星盤</h2><p>從十大行星、星座落點、四元素、三模式與主要相位，深入閱讀你的性格結構。</p></div></div>
-<div className="natal-intro"><span className="eyebrow">NATAL CHART</span><h2>十大行星落點</h2><p>每顆行星代表不同心理功能；「落在哪個星座」描述這股能量習慣如何表現。</p></div>
-<div className="planet-grid">{natal.map(p=><article className="planet-card" key={p.key}><div className="planet-head"><span>{p.symbol}</span><div><small>{p.name}</small><h3>{p.sign.name} <em>{p.sign.degree.toFixed(1)}°</em></h3></div></div><b>{p.meaning}</b><p>{planetInterpret(p)}</p><div className="chips"><span>{p.sign.element}元素</span><span>{p.mode}宮</span></div></article>)}</div>
+<section id="natal" className="section"><div className="section-head"><span>05</span><div><h2>完整西洋本命星盤</h2><p>十大行星 × 十二宮位 × 主要相位 × 元素模式，從單一星座升級為完整心理結構閱讀。</p></div></div>
+<div className="natal-intro"><span className="eyebrow">NATAL CHART PRO</span><h2>你的完整本命星盤</h2><p>本版採熱帶黃道，宮位採等宮制（以精確上升點為第一宮宮頭）。出生時間越準確，宮位解讀越有參考價值。</p><div className="natal-badges"><span>上升 {western.asc.name} {western.asc.degree.toFixed(1)}°</span><span>{houses.system}</span>{ruler&&<span>命主星 {ruler.name}</span>}</div></div>
 
-<div className="section-subhead"><div><span className="eyebrow">ELEMENT & MODE</span><h2>四元素 × 三模式</h2><p>看你整張星盤的能量偏向，而不是只看單一星座。</p></div></div>
+<div className="section-subhead"><div><span className="eyebrow">10 PLANETS × 12 HOUSES</span><h2>十大行星落座與落宮</h2><p>「星座」描述能量如何表現，「宮位」描述這股能量最常在哪個人生領域發生。</p></div></div>
+<div className="planet-grid">{natal.map(p=><article className="planet-card" key={p.key}><div className="planet-head"><span>{p.symbol}</span><div><small>{p.name}</small><h3>{p.sign.name} <em>{p.sign.degree.toFixed(1)}°</em></h3></div><strong>第 {p.house} 宮</strong></div><b>{p.meaning}</b><p>{houseInterpret(p)}</p><div className="chips"><span>{p.sign.element}元素</span><span>{p.mode}宮</span><span>第{p.house}宮</span></div></article>)}</div>
+
+<div className="section-subhead"><div><span className="eyebrow">12 HOUSES</span><h2>十二宮人生領域</h2><p>從上升點開始，每 30° 為一宮；點開可快速理解每一宮代表的人生主題。</p></div></div>
+<div className="house-grid">{houses.cusps.map((c,i)=>{const s=signFromLon(c),inside=natal.filter(p=>p.house===i+1);return <article className="house-card" key={i}><small>HOUSE {String(i+1).padStart(2,'0')}</small><h3>第{i+1}宮・{s.name}</h3><b>{HOUSE_MEANINGS[i]}</b><p>{inside.length?`此宮行星：${inside.map(p=>`${p.symbol}${p.name}`).join('、')}`:'此宮無十大行星落入；仍可透過宮頭星座與命主星延伸解讀。'}</p></article>})}</div>
+
+{ruler&&<div className="ruler-card"><div className="ruler-symbol">{ruler.symbol}</div><div><span className="eyebrow">CHART RULER</span><h2>命主星｜{ruler.name}</h2><p>{ruler.text}</p><div className="chips"><span>{ruler.sign.name}</span><span>第{ruler.house}宮</span><span>{ruler.sign.element}元素</span></div></div></div>}
+
+<div className="section-subhead"><div><span className="eyebrow">ELEMENT & MODE</span><h2>四元素 × 三模式</h2><p>觀察整張星盤的能量偏向：你更依靠行動、現實、思考還是感受？又偏向開創、維持還是適應？</p></div></div>
 <div className="balance-grid">
-<div className="balance-card"><h3>四元素比例</h3>{Object.entries(balance.elements).map(([k,v])=><div className="balance-row" key={k}><span>{k}元素</span><div><i style={{width:`${v*10}%`}}/></div><b>{v*10}%</b></div>)}</div>
-<div className="balance-card"><h3>三模式比例</h3>{Object.entries(balance.modes).map(([k,v])=><div className="balance-row" key={k}><span>{k}宮</span><div><i style={{width:`${v*10}%`}}/></div><b>{v*10}%</b></div>)}</div>
+<div className="balance-card"><h3>四元素比例</h3>{Object.entries(balance.elements).map(([k,v])=><div className="balance-row" key={k}><span>{k}元素</span><div><i style={{width:`${v*10}%`}}/></div><b>{v*10}%</b></div>)}<p className="balance-summary">主導元素：<b>{dominant(balance.elements)[0]}</b>｜代表你較常使用這種方式理解與回應世界。</p></div>
+<div className="balance-card"><h3>三模式比例</h3>{Object.entries(balance.modes).map(([k,v])=><div className="balance-row" key={k}><span>{k}宮</span><div><i style={{width:`${v*10}%`}}/></div><b>{v*10}%</b></div>)}<p className="balance-summary">主導模式：<b>{dominant(balance.modes)[0]}</b>｜反映你面對事情時較自然的推進方式。</p></div>
 </div>
 
-<div className="section-subhead"><div><span className="eyebrow">MAJOR ASPECTS</span><h2>主要相位解析</h2><p>相位描述兩顆行星之間如何互動；越接近精確角度，通常越值得優先閱讀。</p></div></div>
-<div className="aspect-grid">{aspects.map((a,i)=><article className="aspect-card" key={`${a.a.key}-${a.b.key}-${i}`}><div className="aspect-symbols"><span>{a.a.symbol}</span><i>×</i><span>{a.b.symbol}</span></div><small>{a.a.name} × {a.b.name}</small><h3>{a.name}</h3><b>{a.nature}・容許度 {a.orb.toFixed(1)}°</b><p>{aspectInterpret(a)}</p></article>)}</div>
-<div className="natal-note"><b>專業說明</b><p>此版本使用熱帶黃道與地心行星位置呈現十大行星與主要相位。宮位系統、交點與更進階技法可在下一階段再加入；不同占星軟體的設定與容許度也可能造成結果差異。</p></div>
+<div className="section-subhead"><div><span className="eyebrow">MAJOR ASPECTS</span><h2>主要相位解析</h2><p>相位是行星之間的角度關係。流暢相位偏向自然天賦；緊張相位則常成為推動成長的內在動力。</p></div></div>
+<div className="aspect-grid">{aspects.map((a,i)=><article className={`aspect-card ${aspectTone(a.name)}`} key={`${a.a.key}-${a.b.key}-${i}`}><div className="aspect-symbols"><span>{a.a.symbol}</span><i>×</i><span>{a.b.symbol}</span></div><small>{a.a.name} × {a.b.name}</small><h3>{a.name}</h3><b>{a.nature}・容許度 {a.orb.toFixed(1)}°</b><p>{aspectInterpret(a)}</p></article>)}</div>
+
+{synthesis&&<><div className="section-subhead"><div><span className="eyebrow">EAST × WEST SYNTHESIS</span><h2>紫微 × 西洋占星交叉解讀</h2><p>不是把兩套系統分開念，而是把相同人生主題放在一起閱讀。</p></div></div><div className="synthesis-grid"><article><span>♡ LOVE</span><h3>感情與親密關係</h3><p>{synthesis.love}</p></article><article><span>⌁ CAREER</span><h3>事業與發展方向</h3><p>{synthesis.career}</p></article></div></>}
+
+<div className="natal-note"><b>計算與解讀說明</b><p>行星位置使用 Astronomy Engine 的地心天文位置計算；本網站將這些天文位置依熱帶黃道轉為占星符號，再以等宮制分配十二宮。占星與紫微解讀屬文化、娛樂與自我探索用途，不代表科學驗證的性格或未來預測。</p></div>
 </section>
 
 <section id="year" className="section"><div className="section-head"><span>06</span><div><h2>{year} 流年運勢</h2><p>以你的命盤與三大星座產生年度主題與月份節奏。</p></div></div>
